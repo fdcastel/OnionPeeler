@@ -3,6 +3,7 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Modes;
 using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Security;
 using System;
 using System.IO;
 using System.Text;
@@ -310,15 +311,15 @@ namespace OnionPeeler
             aesWrapEngine.Init(false, new ParametersWithIV(new KeyParameter(kek), ivWrappedKey));
             var unwrappedKey = aesWrapEngine.Unwrap(wrappedKey, 0, wrappedKey.Length);
 
-            // Setup AES cipher in CBC mode 
-            var cipher = new BufferedBlockCipher(new CbcBlockCipher(new AesEngine()));
+            // Setup AES cipher in CTR mode -- https://stackoverflow.com/a/38482749/33244
+            var cipher = CipherUtilities.GetCipher("AES/CTR/NoPadding");
             cipher.Init(false, new ParametersWithIV(new KeyParameter(unwrappedKey), ivEncryptedPayload));
 
             var clearText = new byte[cipher.GetOutputSize(encryptedPayload.Length)];
             var len = cipher.ProcessBytes(encryptedPayload, 0, encryptedPayload.Length, clearText, 0);
             cipher.DoFinal(clearText, len);
 
-            const string outputFile = DataFolder + "solution.txt";
+            const string outputFile = DataFolder + "layer6.txt";
             using (var outputStream = new FileStream(outputFile, FileMode.Create))
             {
                 outputStream.Write(clearText);
