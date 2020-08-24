@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Org.BouncyCastle.Crypto;
+using OnionPeeler.Tomtel;
 using Org.BouncyCastle.Crypto.Engines;
-using Org.BouncyCastle.Crypto.Modes;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
 using System;
@@ -323,6 +322,29 @@ namespace OnionPeeler
             using (var outputStream = new FileStream(outputFile, FileMode.Create))
             {
                 outputStream.Write(clearText);
+            }
+            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+        }
+
+        [TestMethod]
+        public void DecodeLayer6()
+        {
+            var source = File.ReadAllText(DataFolder + "layer6.txt", Encoding.ASCII);
+            var payload = ExtractPayload(source);
+            var decoded = DecodeAscii85(payload);
+
+            /* The payload for this layer is bytecode for a program that
+             * outputs the next layer. Create a virtual machine according
+             * to the specification below, and use it to run the payload.
+             */
+
+            var cpu = new Cpu(decoded);
+            cpu.Run();
+
+            const string outputFile = DataFolder + "solution.txt";
+            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            {
+                outputStream.Write(cpu.Output.ToArray());
             }
             Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
         }
