@@ -17,23 +17,17 @@ namespace OnionPeeler
         [TestMethod]
         public void DecodeLayer0()
         {
-            var source = File.ReadAllText(DataFolder + "original.txt");
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("original.txt");
 
             /* This payload has been encoded with Adobe-flavoured ASCII85. */
 
-            const string outputFile = DataFolder + "layer1.txt";
-            File.WriteAllBytes(outputFile, decoded);
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+            GenerateOutputFile("layer1.txt", outputStream => outputStream.Write(decoded));
         }
 
         [TestMethod]
         public void DecodeLayer1()
         {
-            var source = File.ReadAllText(DataFolder + "layer1.txt", Encoding.ASCII);
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("layer1.txt");
 
             /* Apply the following operations to each byte of the payload:
              * 
@@ -41,8 +35,7 @@ namespace OnionPeeler
              *   2. Rotate the bits one position to the right
              */
 
-            const string outputFile = DataFolder + "layer2.txt";
-            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            GenerateOutputFile("layer2.txt", outputStream =>
             {
                 const byte oddBits = 0b_1010_1010;
                 const byte evenBits = 0b_0101_0101;
@@ -53,16 +46,13 @@ namespace OnionPeeler
                     var result = (byte)((original & oddBits) | (flipped & evenBits));
                     outputStream.WriteByte((byte)((result << 7) | (result >> 1)));
                 }
-            }
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+            });
         }
 
         [TestMethod]
         public void DecodeLayer2()
         {
-            var source = File.ReadAllText(DataFolder + "layer2.txt");
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("layer2.txt");
 
             /* For each byte of the payload, the seven most significant
              * bits carry data, and the least significant bit is the parity
@@ -82,8 +72,7 @@ namespace OnionPeeler
             var bytesWritten = parityStream.Position;
             var parityData = parityStream.GetBuffer();
 
-            const string outputFile = DataFolder + "layer3.txt";
-            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            GenerateOutputFile("layer3.txt", outputStream =>
             {
                 /* aaaaaaap bbbbbbbp cccccccp dddddddp eeeeeeep fffffffp gggggggp hhhhhhhp
                  * 
@@ -100,22 +89,21 @@ namespace OnionPeeler
                     outputStream.WriteByte((byte)(((parityData[i + 5] << 5) & 0b_1100_0000) | (parityData[i + 6] >> 2)));
                     outputStream.WriteByte((byte)(((parityData[i + 6] << 6) & 0b_1000_0000) | (parityData[i + 7] >> 1)));
                 }
-            }
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+            });
         }
 
         [TestMethod]
         public void DecodeLayer3()
         {
-            var source = File.ReadAllText(DataFolder + "layer3.txt");
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("layer3.txt");
 
             /* The payload has been encrypted by XOR'ing each byte with a
              * secret, cycling key. The key is 32 bytes of random data,
              * which I'm not going to give you.
              */
 
+            // Known text inferred from pattern used in previous layers.
+            // The last two chars ("Wh") have been guessed, looking over the decoded text.
             const string knownText =
               "==[ Layer 4/6: ????????????????????????????????=============\n\nWh";
             // 012345678901234567890123456789012345678901234567890123456789 0 123
@@ -140,6 +128,8 @@ namespace OnionPeeler
             aKey[13] = (byte)(decoded[13] ^ aKnownText[13]);
             aKey[14] = (byte)(decoded[14] ^ aKnownText[14]);
 
+            // Unknown part ("?")
+
             aKey[15] = (byte)(decoded[47] ^ aKnownText[47]);
             aKey[16] = (byte)(decoded[48] ^ aKnownText[48]);
             aKey[17] = (byte)(decoded[49] ^ aKnownText[49]);
@@ -158,23 +148,19 @@ namespace OnionPeeler
             aKey[30] = (byte)(decoded[62] ^ aKnownText[62]);
             aKey[31] = (byte)(decoded[63] ^ aKnownText[63]);
 
-            const string outputFile = DataFolder + "layer4.txt";
-            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            GenerateOutputFile("layer4.txt", outputStream =>
             {
                 for (var i = 0; i < decoded.Length; i++)
                 {
                     outputStream.WriteByte((byte)(decoded[i] ^ aKey[i % 32]));
                 }
-            }
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+            });
         }
 
         [TestMethod]
         public void DecodeLayer4()
         {
-            var source = File.ReadAllText(DataFolder + "layer4.txt", Encoding.ASCII);
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("layer4.txt");
 
             /* The payload for this layer is encoded as a stream of raw
              * network data, as if the solution was being received over the
@@ -213,8 +199,7 @@ namespace OnionPeeler
             const uint destinationIp = 10 << 24 | 1 << 16 | 1 << 8 | 200;
             const ushort destinationPort = 42069;
 
-            const string outputFile = DataFolder + "layer5.txt";
-            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            GenerateOutputFile("layer5.txt", outputStream =>
             {
                 while (ipv4Stream.Position != ipv4Stream.Length)
                 {
@@ -275,16 +260,13 @@ namespace OnionPeeler
                         }
                     }
                 }
-            }
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+            });
         }
 
         [TestMethod]
         public void DecodeLayer5()
         {
-            var source = File.ReadAllText(DataFolder + "layer5.txt", Encoding.ASCII);
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("layer5.txt");
 
             /* The payload is structured like this:
              * 
@@ -318,20 +300,16 @@ namespace OnionPeeler
             var len = cipher.ProcessBytes(encryptedPayload, 0, encryptedPayload.Length, clearText, 0);
             cipher.DoFinal(clearText, len);
 
-            const string outputFile = DataFolder + "layer6.txt";
-            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            GenerateOutputFile("layer6.txt", outputStream =>
             {
                 outputStream.Write(clearText);
-            }
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
+            });
         }
 
         [TestMethod]
         public void DecodeLayer6()
         {
-            var source = File.ReadAllText(DataFolder + "layer6.txt", Encoding.ASCII);
-            var payload = ExtractPayload(source);
-            var decoded = DecodeAscii85(payload);
+            var decoded = DecodePayloadFromFile("layer6.txt");
 
             /* The payload for this layer is bytecode for a program that
              * outputs the next layer. Create a virtual machine according
@@ -341,25 +319,10 @@ namespace OnionPeeler
             var cpu = new Cpu(decoded);
             cpu.Run();
 
-            const string outputFile = DataFolder + "solution.txt";
-            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            GenerateOutputFile("solution.txt", outputStream =>
             {
                 outputStream.Write(cpu.Output.ToArray());
-            }
-            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
-        }
-
-        private static ReadOnlySpan<char> ExtractPayload(ReadOnlySpan<char> content)
-        {
-            int begin = content.IndexOf(Ascii85.PrefixMark.AsSpan());
-            int end = content.LastIndexOf(Ascii85.SuffixMark.AsSpan());
-            return content.Slice(begin, end - begin + Ascii85.SuffixMark.Length);
-        }
-
-        private static byte[] DecodeAscii85(ReadOnlySpan<char> payload)
-        {
-            var ascii85 = new Ascii85();
-            return ascii85.Decode(payload);
+            });
         }
 
         private static bool IsParityCorrect(byte value)
@@ -376,6 +339,33 @@ namespace OnionPeeler
             bitsSet += (value >> 7) & 1;
 
             return (bitsSet + parityBit) % 2 == 0;
+        }
+
+        private static ReadOnlySpan<char> ExtractPayload(ReadOnlySpan<char> content)
+        {
+            int begin = content.IndexOf(Ascii85.PrefixMark.AsSpan());
+            int end = content.LastIndexOf(Ascii85.SuffixMark.AsSpan());
+            return content.Slice(begin, end - begin + Ascii85.SuffixMark.Length);
+        }
+
+        private static byte[] DecodePayloadFromFile(string sourceFile)
+        {
+            var source = File.ReadAllText(DataFolder + sourceFile);
+            var payload = ExtractPayload(source);
+
+            var ascii85 = new Ascii85();
+            return ascii85.Decode(payload);
+        }
+
+        private static void GenerateOutputFile(string targetFile, Action<FileStream> generator)
+        {
+            var outputFile = DataFolder + targetFile;
+            using (var outputStream = new FileStream(outputFile, FileMode.Create))
+            {
+                generator(outputStream);
+            }
+
+            Assert.IsTrue(File.ReadAllText(outputFile).StartsWith("==["));
         }
     }
 }
